@@ -128,6 +128,7 @@ newUserButton.addEventListener("click", (event) => {
     
         sendText.addEventListener('click' , () => {
 
+
             // Messages from other users
             const messageBox = document.querySelector("#messageBox");
             const messageElement = document.createElement('li');
@@ -135,6 +136,7 @@ newUserButton.addEventListener("click", (event) => {
             // Send new message to server
             const message = textInput.value;
             ws.send(message)
+            textInput.value = "";
             console.log("script message =>" , message)
             
             // MY OWN MESSAGES
