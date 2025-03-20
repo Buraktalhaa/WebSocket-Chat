@@ -45,12 +45,87 @@ export async function checkPerson(personName) {
     }
 }
 
-
 // Place to add messages to database
 export async function addMessagesToDb(channelId , userId , text){
-    const queryMessage = ('INSERT INTO messages(channel_id , person_id , message_text) VALUES ($1 , $2 , $3) RETURNING message_text');
+    const queryMessage = ('INSERT INTO messages(channel_id , person_id , message_text) VALUES ($1 , $2 , $3) RETURNING message_text , id');
     const valueMessage = [channelId , userId , text];
 
     const addMessageDb = await pool.query(queryMessage , valueMessage);
-    return addMessageDb.rows[0].message_text;
+    return {messageText: addMessageDb.rows[0].message_text , messageId: addMessageDb.rows[0].id}
+}
+
+export async function getChannelList(){
+    const channelList =[];
+    const query = ('SELECT channel_name FROM channel');
+    const channels = await pool.query(query)
+    channels.rows.forEach(channel => {
+        // Array icine pushla
+        channelList.push(channel.channel_name)
+    })
+    return channelList;
+}
+
+export async function deleteMessageInDb(value){
+    try {
+        const conditionQuery = 'SELECT created_time FROM messages WHERE id=$1;'
+        const conditionValue = [value];
+        const result = await pool.query(conditionQuery , conditionValue);
+
+        const createdTime = new Date(result.rows[0].created_time);
+        const currentTime = new Date()
+        const timeDifference = currentTime - createdTime;
+        console.log("Time difference = >" , timeDifference)
+        const differenceInMinutes = Math.floor(timeDifference / 60000);
+        console.log("calismadi", differenceInMinutes)
+        if (differenceInMinutes < 1) {
+            const queryMessage = 'UPDATE messages SET deleted=$2 WHERE id=$1';
+
+            const valueMessage = [value, true]
+        
+            await pool.query(queryMessage , valueMessage)
+            return {command: "Silindi"};
+        } else {
+            return {command: "Silinemedi"};
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}
+            
+export async function editMessage(editedTextId, editedText) {
+    try {
+
+        const query = 'UPDATE messages SET message_text=$2 WHERE id=$1 RETURNING message_text';
+        const values = [editedTextId, editedText]; 
+        const edited = await pool.query(query, values);
+
+        if (edited.rows.length > 0) { 
+            return edited.rows[0].message_text;
+        } else {
+            return null; 
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+
+export async function deleteForMeDb(messageId , sender){
+    try {
+        const query = 'UPDATE messages SET deleted_for_users=$1 WHERE id=$2 RETURNING id';
+        const value = [JSON.stringify([sender]), messageId]; 
+
+        const deleteInDb = await pool.query(query , value);
+        return deleteInDb.rows[0].id;
+    } catch (error) {
+        return console.error(error);
+    }   
+}
+
+
+
+export async function lastId(){
+    const query = 'SELECT id FROM channel ORDER BY id DESC LIMIT 1';
+    const result = await pool.query(query);
+    return result.rows[0].id;;
 }
