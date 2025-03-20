@@ -53,25 +53,25 @@ newUserButton.addEventListener("click", (event) => {
     const ws = new WebSocket('ws://localhost:8080');
 
            
-
     // When click the send button
     sendNameButton.addEventListener('click', (event1) => {
         event1.preventDefault();
           
-
         if (!userName.value) {
             console.log('Please make sure you have filled in name fiels.');
             return;
         }
 
+        // Send the name value to the server
         ws.send(JSON.stringify({ command: 'sendName', name: userName.value}));
+
+        // Request channels from database
         ws.send(JSON.stringify({ command: "request_channel_list" })); 
 
         console.log(userName.value);
 
-        userName.style.display = "none";
-        sendNameButton.style.display = "none";
-        cancelButton.style.display = "none";
+        // Hide the form after getting the name data
+        hideForm(userName , sendNameButton , cancelButton);
 
 
         const channelNameForm = `
@@ -101,36 +101,39 @@ newUserButton.addEventListener("click", (event) => {
         const sendChannelButton = document.querySelector("#sendChannelDataBtn");
         const cancelChannelButton = document.querySelector("#cancelChannelBtn");
 
-        // CHANNEL LARI BUTON OLARAK GETIRMEK ICIN
+        // To display channels as buttons
         ws.onmessage = (event) => {
-            const parsedValue = JSON.parse(event.data.toString());   // duzenlencek
+            const parsedValue = JSON.parse(event.data.toString()); 
+            const command = parsedValue.serverCommand;
 
-            if (parsedValue.command === "requestedChannelList") {
+            // Show channels from database as buttons
+            if (command === "requestedChannelList") {
                 parsedValue.channelList.forEach(element => {
                     channelList.push(element)
                     const button = document.createElement('button');
                     button.classList.add("buttonChannel")
                     button.textContent = element;                        
                     button.id = buttonId;
-    
+                    
+                    // add buttons to HTML page
                     document.body.appendChild(button)
                     const selectChannel = document.getElementById(buttonId)
                     selectChannel.addEventListener("click", () => {
-                        console.log(selectChannel.textContent)   // Burasi duzenlencek
+                        console.log(selectChannel.textContent) 
                        
                         ws.send(JSON.stringify({command: 'sendChannelName', channelName: selectChannel.textContent}));
                         ws.send(JSON.stringify({command: 'sendLastChannelId'}))
 
-                        // CHAT ILE ILGILI MESAJLARI GETIR
+                        // Bring old sent message
+                        ws.send(JSON.stringify({command: 'bringOldMessages' , channelName: selectChannel.textContent}));   
 
-                        ws.send(JSON.stringify({command: 'bringOldMessages' , channelName: selectChannel.textContent}));
+                        // Hide the form after getting channel information
+                        hideForm(channelName , sendChannelButton , cancelChannelButton)
 
-                        formuYokEt(channelName , sendChannelButton , cancelChannelButton)
-
-                        textInput.disabled = false;      
-                        sendText.disabled = false;  
-
-                        chatbox(ws)
+                        // Disabled process is removed
+                        openDisabled(textInput , sendText);
+                        
+                        chatBox(ws , userName.value)
 
                     })
                 buttonId++;
@@ -138,7 +141,6 @@ newUserButton.addEventListener("click", (event) => {
                 console.log(channelList)
             }
         }
-
 
         sendChannelButton.addEventListener('click' , (event2) => {
             event2.preventDefault();
@@ -151,100 +153,78 @@ newUserButton.addEventListener("click", (event) => {
             console.log("ch => " , channelName.value)
             ws.send(JSON.stringify({ command: 'sendChannelName', channelName: channelName.value}));
 
-            // DISABLED PROCESS IS REMOVED
-            textInput.disabled = false;      
-            sendText.disabled = false;     
-            
-            console.log(sendChannelButton.value)
+            //  Disabled process is removed
+            openDisabled(textInput , sendText);
+    
+            // Bring old sent message
+            ws.send(JSON.stringify({command: 'bringOldMessages' , channelName: channelName.value}));
 
-            formuYokEt(channelName , sendChannelButton , cancelChannelButton);
+            // Hide the form after getting channel information
+            hideForm(channelName , sendChannelButton , cancelChannelButton);
 
-            // channel i kendi girerse butonlari kaldir 
+            // If the channel information is written by itself, remove the channel buttons
             ws.send(JSON.stringify({command: 'sendLastChannelId'}))
 
-
-            chatbox(ws);
-
-
+            chatBox(ws , userName.value);
         })
 
-
-
+        // SEND MESSAGE
         sendText.addEventListener('click', () => {
             // Send new message to server
             const message = textInput.value;
             ws.send(JSON.stringify({ command: "send_text", message }))
             textInput.value = "";
-            console.log("script message =>", message)
 
         })
     });
 });
 
 
-
-
-// FONKSIYONLARA BOLMEYE BASLA
-function chatbox(ws){
-    ws.onmessage = (event) => {   //BUNDAN IKI TANE VAR 
+function chatBox(ws ,name){
+    ws.onmessage = (event) => {  
 
         try {
-            // console.log('WebSocket message received', event.data);
             const { command_from, from, text, messageId, deleted } = JSON.parse(event.data.toString());
             const parsedValue = JSON.parse(event.data.toString());   // duzenlencek
-            // const command = parsedValue.command;
-            console.log(command_from, from, text, messageId, deleted)
+
+            // Commands came from server
+            const command = parsedValue.serverCommand;  
+
             const messageBox = document.querySelector("#messageBox");
             const messageElement = document.createElement('li');
 
-            let buttonId = 0;
 
+            // Old message from database
+            if(command === "oldMessagesCame"){
+                const allMes = parsedValue.allMes; 
+                console.log("allmes kontrol" , allMes)
+                allMes.forEach(element => {
+                    const personName = element.person_name;
+                    const messageText = element.message_text;
 
-            // Kanallari iste
-            if (parsedValue.command === "requestedChannelList") {
-                parsedValue.channelList.forEach(element => {
-                    channelList.push(element)
-                    const button = document.createElement('button');
-                    button.textContent = element;                        
-                    button.id = buttonId;
-    
-                    document.body.appendChild(button)
-                    const selectChannel = document.getElementById(buttonId)
-                    selectChannel.addEventListener("click", () => {
-                        console.log(selectChannel.textContent)   // Burasi duzenlencek
-                    })
-                buttonId++;
-                });
-                console.log(channelList)
+                    const messageElement = document.createElement("li");
+                    messageElement.classList.add('send-button')
+                    messageElement.textContent = `[${personName}]: ${messageText}`;
+                    messageBox.appendChild(messageElement)
+                })
             }
 
-            // Channel olusturma istegi olursa hazir channellari kaldir
-            else if(parsedValue.command === "requestedLastChannelId"){
+            // If there is a request to create a channel, remove the channel buttons.
+            else if(command === "requestedLastChannelId"){
                 const lastId = parsedValue.lastId;
-                console.log("calisti 123" , lastId )
-                function hideAllButtons(totalButtons) {
-                    for (let i = 0; i <= totalButtons; i++) {
-                        const button = document.getElementById(i.toString());
-                        if (button) {
-                            button.style.display = "none";  // Butonu görünmez yapar
-                        }
-                    }
-                }
                 hideAllButtons(lastId)
 
             }
 
-
-            // Message from server
-            else if (command_from === "message_server") {
+            // MESSAGE FROM SERVER
+            else if (command === "message_server") {
                 messageElement.textContent = `[${from}]: ${deleted ? "Mesaj silindi" : text}`;
                 messageElement.classList.add('text-server')
                 messageBox.appendChild(messageElement)
             }
 
-
             // MESSAGES FROM THE CLIENTS
-            else if (command_from === "other_clients") {
+            else if (command === "other_clients") {
                 messageElement.id = messageId;
                 messageElement.appendChild(document.createTextNode(`[${from}]: ${text}`))
 
@@ -255,8 +235,7 @@ function chatbox(ws){
                 messageElement.appendChild(deleteButtonForMe)
 
                 deleteButtonForMe.addEventListener("click", (event) => {
-                    ws.send(JSON.stringify({ command: "deleteForMe", messageId: messageId, sender: from }))
-                    console.log("Client tarafinda benden sil")
+                    ws.send(JSON.stringify({ command: "deleteForMe", messageId: messageId, sender: name})) // name is paremeter from ws
                 })
 
                 console.log(`[${from}]: ${text}`)
@@ -265,7 +244,7 @@ function chatbox(ws){
             }
 
             // You are alone in channel
-            else if (command_from === "alone_command") {
+            else if (command === "alone_command") {
                 const eventValue = JSON.parse(event.data.toString());
                 messageElement.textContent = `[${from}]: ${eventValue.text}`
                 messageElement.classList.add('text-server')
@@ -273,7 +252,7 @@ function chatbox(ws){
             }
 
             // MY OWN MESSAGES
-            else if (command_from === "myMessages") {
+            else if (command === "myMessages") {
                 messageElement.id = messageId;
                 const sender = from;
                 messageElement.appendChild(document.createTextNode(`[Me]: ${text}`))
@@ -317,35 +296,35 @@ function chatbox(ws){
                 // For me
                 deleteForMeButton.addEventListener('click', () => {
                     ws.send(JSON.stringify({ command: "deleteForMe", messageId: messageId, sender: sender }));
+                    console.log("undefined mi kendi mesajlari" , sender)
                 })
             }
 
-            // Backendden editlenen veri geldikten sonra
-            else if (command_from === 'editedMessage') {
+            // After the edited message comes from the backend
+            else if (command === 'editedMessage') {
                 const editedMes = document.getElementById(`${messageId}`);
                 const sender = parsedValue.sender;
 
-                // Edit buton tekrar olusturuluyor
+                // Edit button creted after edit
                 const editButton = document.createElement('button');
                 editButton.textContent = "Edit";
                 editButton.classList.add('send-button');
 
-                // delete for all button tekrar olusturuluyor
+                // Delete for all button creted after edit
                 const deleteButton = document.createElement('button');
                 deleteButton.textContent = "Delete for all";
                 deleteButton.classList.add('send-button');
 
-                // Editlendi butonu
+                // Edit button css
                 const editedTag = document.createElement('span');
                 editedTag.textContent = 'Editlendi';
                 editedTag.style.fontSize = '10px';
                 editedTag.style.color = 'grey';
 
-                // sadece benden sil
+                // Delete for me button creted after edit
                 const deleteForMeButton = document.createElement('button');
                 deleteForMeButton.textContent = "Delete for me";
                 deleteForMeButton.classList.add('send-button');
-
 
                 // Sender messages
                 if (editedMes.classList.contains('text-my-message')) {
@@ -367,12 +346,10 @@ function chatbox(ws){
                         ws.send(JSON.stringify({ command: "deleteMessage", messageId: messageId }));
                     });
 
-
-                    // Benim icin sil e basilinca
+                    // Click delete for me
                     deleteForMeButton.addEventListener('click', () => {
                         ws.send(JSON.stringify({ command: "deleteForMe", messageId: messageId, sender: sender }))
                     })
-
                 }
 
                 // Other clients
@@ -395,25 +372,25 @@ function chatbox(ws){
 
             }
             // 
-            else if (command_from === "deletedMessage") {
+            else if (command === "deletedMessage") {
                 const deletedMes = document.getElementById(`${messageId}`)
-                deletedMes.innerText = "Silindi..."
+                deletedMes.innerText = "Deleted..."
             }
 
-            // Mesaji kendinden silme
-            else if (command_from === 'deletedForMe') {
+            // Delete for me
+            else if (command === 'deletedForMe') {
                 const deletedMessage = document.getElementById(messageId);
                 if (deletedMessage) {
-                    deletedMessage.textContent = "Mesaji kendinden sildin.";
+                    deletedMessage.textContent = "Deleted message for me";
                 }
             }
 
-            else if (command_from === 'timeError') {
-
+            else if (command === 'timeError') {
+                console.log("Time error, message not deleted")
             }
 
             else {
-                console.log("hata")
+                console.log("Error")
             }
         } catch (error) {
             console.error;
@@ -423,10 +400,25 @@ function chatbox(ws){
 
 
 
-
-function formuYokEt(channelName , sendChannelButton , cancelChannelButton){
-    // channel olusturma formunu yok ettik
+// Hide channel creation form
+function hideForm(channelName , sendChannelButton , cancelChannelButton){
     channelName.style.display = "none";
     sendChannelButton.style.display = "none";
     cancelChannelButton.style.display = "none";
+}
+
+
+function openDisabled(textInput , sendText){
+    textInput.disabled = false;      
+    sendText.disabled = false;  
+}
+
+// Hide channel buttons if a channel is selected
+function hideAllButtons(totalButtons) {
+    for (let i = 0; i <= totalButtons; i++) {
+        const button = document.getElementById(i.toString());
+        if (button) {
+            button.style.display = "none";  // Butonu görünmez yapar
+        }
+    }
 }
