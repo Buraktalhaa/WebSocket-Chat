@@ -1,6 +1,6 @@
 // All imports
 import { WebSocketServer } from "ws";
-import { checkChannel, checkPerson, addMessagesToDb, getChannelList , deleteMessageInDb, editMessage , deleteForMeDb , lastId} from "./database/helpers.js"
+import { checkChannel, checkPerson, addMessagesToDb, getChannelList , deleteMessageInDb, editMessage , deleteForMeDb , lastId , getMessagesForUser} from "./database/helpers.js"
 
 const wss = new WebSocketServer({ port: 8080 });
 
@@ -28,16 +28,13 @@ wss.on('connection', async function (ws) {
 
         const listeningMessage = JSON.parse(message.toString());
 
-        // console.log("deneme", JSON.parse(message.toString()))
-
-
+        // Retrieve old channels from database
         if (listeningMessage.command === "request_channel_list") {
             const channelList = await getChannelList();
-            ws.send(JSON.stringify({command: "requestedChannelList" , channelList: channelList}));
-            console.log("Request channel list calisti");
+            ws.send(JSON.stringify({serverCommand: "requestedChannelList" , channelList: channelList}));
         }
 
-
+        // Get the name parameter from the frontend and check if the person is in the database.
         else if (listeningMessage.command === "sendName") {
             const personName = listeningMessage.name;
             if (!personName) {
@@ -47,23 +44,19 @@ wss.on('connection', async function (ws) {
             
             personNameForClose = personName;
 
-
             // User in databasede olup olmadigini kontrol et
             userId = await checkPerson(personName);
             console.log("User id => ", userId)
         } 
 
-
+        // Last channel id sent
         else if(listeningMessage.command === 'sendLastChannelId'){
             const lastChannelId = await lastId();
-            console.log("son id" , lastChannelId)
-            ws.send(JSON.stringify({command: "requestedLastChannelId" ,lastId: lastChannelId }))
+            ws.send(JSON.stringify({serverCommand: "requestedLastChannelId" ,lastId: lastChannelId }))
         }
 
-
-
+        // Get the channelName parameter from the frontend and check if the channel is in the database.
         else if(listeningMessage.command === "sendChannelName"){
-            
             const channelName = listeningMessage.channelName;
             if (!channelName) {
                 console.error("Channel name missing.");
@@ -75,28 +68,28 @@ wss.on('connection', async function (ws) {
             // Create channel.
             createChannel(channelName);   
 
-
-            // CHECK IF THERE IS A CHANNEL ON THE CHANNEL
-            channelId = await checkChannel(channelName);   
-
-            // Channel id dogru mu kontrol etmek icin.
-            console.log("Channel id => ", channelId);  
-
+            // Check if there is a channel on the channel
+            channelId = await checkChannel(channelName);  
 
             // Add user to channel
             addUserToChannel(ws, channelName, personNameForClose);  
 
+            // send welcome message to user
             sendMessage(ws, "message_server", "Server", `Hello ${personNameForClose}, welcome to ${channelName}!` , null , false)    //1
         }
 
-        // else if(listeningMessage.command === "bringOldMessages"){
-        //     function bringOldMessages(){
-        //         const query = 
-        //         const value = 
-        //     }
-        // }
+        // Bring old message from database 
+        else if(listeningMessage.command === "bringOldMessages"){
 
+            const channelNameForMessage = listeningMessage.channelName;
+            const channelIdForMessage = await checkChannel(channelNameForMessage);
 
+            const allMessages = await getMessagesForUser(channelIdForMessage , personNameForClose); //channelId ve username gonderilcek 
+            console.log(allMessages)
+            ws.send(JSON.stringify({serverCommand: "oldMessagesCame" , allMes: allMessages}))
+        }
+
+        // Send message from frontend to database
         else if(listeningMessage.command === "send_text"){
             const text = listeningMessage.message.toString();
 
@@ -110,12 +103,10 @@ wss.on('connection', async function (ws) {
                 findOtherClient(ws, channelNameForClose, personNameForClose, text , messageId);
                 
                 // For my messages
-                ws.send(JSON.stringify({command_from: "myMessages" ,from: personNameForClose , text: text , messageId: messageId , deleted: false}))
-
-                // console.log("Last sent message => ", messageText , messageId);
+                ws.send(JSON.stringify({serverCommand: "myMessages" ,from: personNameForClose , text: text , messageId: messageId , deleted: false}))
             }
             else {
-                // Kanalda sadece sen varsin mesaji gonder.
+                // You are alone in channel 
                 sendMessage(ws, "alone_command", "Server", aloneText , null ,false)
             }
         }
@@ -124,22 +115,18 @@ wss.on('connection', async function (ws) {
         else if(listeningMessage.command === "deleteMessage"){
             const value = listeningMessage.messageId;
             const deletedMes = await deleteMessageInDb(value);
-            console.log("Databaseden gelen silindi mesaji => " , deletedMes)
-            if (deletedMes.command ==="Silindi") {
+
+            if (deletedMes.command ==="Deleted") {
                 sendToAllClient(personNameForClose, channelNameForClose , value)
             }
-            else if(deletedMes.command === "Silinemedi"){
-                function sendTimeError(){
-                    ws.send(JSON.stringify({command:"timeError"}));
-                }
+            else if(deletedMes.command === "Not deleted"){
+                sendTimeError();
             }
         }
 
 
-        // Mesaji editleme
+        // Edit message
         else if(listeningMessage.command === "editMessage"){
-            // const sender = listeningMessage.sender;
-            // console.log("Sender => " , sender);
             const editedText = listeningMessage.editedMes;
             const editedTextId = listeningMessage.messageId;
             const sender = listeningMessage.sender;
@@ -149,13 +136,13 @@ wss.on('connection', async function (ws) {
         }
 
 
-        // Mesaji kendinden silme
+        // Delete the message for the sender only (mark it as deleted for the specific user)
         else if(listeningMessage.command === "deleteForMe"){
             const deletedMessageId = listeningMessage.messageId;
-            const sender = listeningMessage.sender;
+            const sender = listeningMessage.sender;  
 
             const deletedForMe = await deleteForMeDb(deletedMessageId ,sender);
-            ws.send(JSON.stringify({ command_from: "deletedForMe", messageId: deletedMessageId}));
+            ws.send(JSON.stringify({ serverCommand: "deletedForMe", messageId: deletedMessageId}));
         }
     });
 
@@ -195,8 +182,8 @@ function addUserToChannel(ws, channelName, personName) {
 
 
 // Send message
-function sendMessage(ws, command_from, fromValue, textValue , messageId , deleted) {
-    ws.send(JSON.stringify({ command_from, from: fromValue, text: textValue , messageId , deleted}))
+function sendMessage(ws, serverCommand, fromValue, textValue , messageId , deleted) {
+    ws.send(JSON.stringify({ serverCommand, from: fromValue, text: textValue , messageId , deleted}))
 }
 
 
@@ -205,22 +192,30 @@ function sendMessage(ws, command_from, fromValue, textValue , messageId , delete
 function findOtherClient(ws, channelName, personName, text , messageId) {
     clients[channelName].forEach(client => {
         if (client !== ws && client.readyState === 1) {
-            const command = "other_clients";
-            sendMessage(client, command, personName, text , messageId , false);   
+            const serverCommand = "other_clients";
+            console.log("orher client => " ,personName)
+            sendMessage(client, serverCommand, personName, text , messageId , false);   
         }
     })
 }
 
 
+// Deleted message return to everyone
 function sendToAllClient(personNameForClose, channelName , value){
     clients[channelName].forEach(client => {
-        client.send(JSON.stringify({command_from: "deletedMessage" , from: personNameForClose , text:"" , messageId: value , deleted: true}))
+        client.send(JSON.stringify({serverCommand: "deletedMessage" , from: personNameForClose , text:"" , messageId: value , deleted: true}))
+    })
+}
+
+// Edited message return to everyone
+function sendToAllClientEditedMes(edited , channelName , value , sender){
+    clients[channelName].forEach(client => {
+        client.send(JSON.stringify({serverCommand: "editedMessage" , messageId:value , text: edited , sender:sender}))
     })
 }
 
 
-function sendToAllClientEditedMes(edited , channelName , value , sender){
-    clients[channelName].forEach(client => {
-        client.send(JSON.stringify({command_from: "editedMessage" , messageId:value , text: edited , sender:sender}))
-    })
+// Delete message if it has been 1 minute since the message was sent
+function sendTimeError(){
+    ws.send(JSON.stringify({serverCommand:"timeError"}));
 }
