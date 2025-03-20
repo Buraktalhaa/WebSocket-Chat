@@ -17,7 +17,9 @@ CREATE TABLE messages(
     channel_id INTEGER REFERENCES channel(id) ON DELETE CASCADE,
     person_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     message_text TEXT,
-    created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted BOOLEAN DEFAULT FALSE,
+    deleted_for_users JSONB DEFAULT '[]'
 );
 
 
