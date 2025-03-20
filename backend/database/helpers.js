@@ -54,17 +54,18 @@ export async function addMessagesToDb(channelId , userId , text){
     return {messageText: addMessageDb.rows[0].message_text , messageId: addMessageDb.rows[0].id}
 }
 
+// Get channel names from database
 export async function getChannelList(){
     const channelList =[];
     const query = ('SELECT channel_name FROM channel');
     const channels = await pool.query(query)
     channels.rows.forEach(channel => {
-        // Array icine pushla
         channelList.push(channel.channel_name)
     })
     return channelList;
 }
 
+// Delete message in database
 export async function deleteMessageInDb(value){
     try {
         const conditionQuery = 'SELECT created_time FROM messages WHERE id=$1;'
@@ -92,6 +93,7 @@ export async function deleteMessageInDb(value){
     }
 }
             
+// Edit the messega in database 
 export async function editMessage(editedTextId, editedText) {
     try {
 
@@ -109,7 +111,7 @@ export async function editMessage(editedTextId, editedText) {
     }
 }
 
-
+// Marks the message as deleted only for the specified user (sender) in the database
 export async function deleteForMeDb(messageId , sender){
     try {
         const query = 'UPDATE messages SET deleted_for_users=$1 WHERE id=$2 RETURNING id';
@@ -122,10 +124,38 @@ export async function deleteForMeDb(messageId , sender){
     }   
 }
 
-
-
+// Get the ID of the last added channel from the channel table.
 export async function lastId(){
     const query = 'SELECT id FROM channel ORDER BY id DESC LIMIT 1';
     const result = await pool.query(query);
     return result.rows[0].id;;
+}
+
+
+
+// Get old messages in channel
+export async function getMessagesForUser(channelId, username) {
+    try {
+        const query = `
+            SELECT 
+                messages.id,
+                messages.message_text,
+                users.person_name
+            FROM 
+                messages
+            JOIN 
+                users 
+            ON 
+                messages.person_id = users.id
+            WHERE 
+                messages.channel_id = $1
+                AND messages.deleted = FALSE
+                AND NOT (messages.deleted_for_users @> to_jsonb($2::text));
+        `;
+
+        const result = await pool.query(query, [channelId, username]);
+        return result.rows; 
+    } catch (error) {
+        console.error('An error occurred while retrieving data:', error);
+    }
 }
