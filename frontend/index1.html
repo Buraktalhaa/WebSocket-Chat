@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Document</title>
+</head>
+<body>
+
+    <div id="mainContainer">  <!-- All content will be kept here -->
+
+    </div>
+     
+    <div class="form-container">
+        <form action="/submit" method="POST" id="userForm">
+            <div>
+                <div class="input-wrapper">
+                    <input type="text" placeholder="Name.." name="personName" id="personName" required>
+                </div>
+                <div class="input-wrapper">
+                    <input type="text" placeholder="Channel.." name="channelName" id="channelName" required>
+                </div>
+            </div>
+            <div>
+                <button class="sendBtn" type="button" id="cancelBtn">
+                    <span class="sendBtn-content">Cancel</span>
+                </button>
+                <button class="sendBtn" type="submit" id="sendDataBtn">
+                    <span class="sendBtn-content">Send</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+
+    <!-- </div> -->
+
+    <script src="script.js"></script>
+</body>
+</html>
