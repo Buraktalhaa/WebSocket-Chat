@@ -1,4 +1,4 @@
-import {pool} from "../config.js";
+import {pool} from "../config/db.js";
 
 // TO CHECK IF THE CHANNEL EXISTS OR NOT
 // Return id value whether it exists or not
