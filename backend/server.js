@@ -27,123 +27,133 @@ wss.on('connection', async function (ws) {
     ws.on("message", async (message) => {
 
         const listeningMessage = JSON.parse(message.toString());
+        const channelName = listeningMessage.channelName;
+        const messageId = listeningMessage.messageId;
+        const editedText = listeningMessage.editedMes;
+        const sender = listeningMessage.sender;
 
-        // Retrieve old channels from database
-        if (listeningMessage.command === "request_channel_list") {
-            const channelList = await getChannelList();
-            ws.send(JSON.stringify({serverCommand: "requestedChannelList" , channelList: channelList}));
-        }
-
-        // Get the name parameter from the frontend and check if the person is in the database.
-        else if (listeningMessage.command === "sendName") {
-            const personName = listeningMessage.name;
-            if (!personName) {
-                console.error("Name missing.");
-                return;
-            }
+        switch (listeningMessage.command) {
+            // Retrieve old channels from database
+            case "request_channel_list":
+                const channelList = await getChannelList();
+                ws.send(JSON.stringify({
+                    serverCommand: "requestedChannelList", 
+                    channelList: channelList
+                }));
+                break;
+        
+            // Get the name parameter from the frontend and check if the person is in the database
+            case "sendName":
+                const personName = listeningMessage.name;
+                if (!personName) {
+                    console.error("Name missing.");
+                    return;
+                } else {
+                    personNameForClose = personName;
+                    // Check if the user exists in the database
+                    userId = await checkPerson(personName);
+                    console.log("User id => ", userId);
+                }
+                break;
+        
+            // Last channel ID sent
+            case "sendLastChannelId":
+                const lastChannelId = await lastId();
+                ws.send(JSON.stringify({
+                    serverCommand: "requestedLastChannelId", 
+                    lastId: lastChannelId
+                }));
+                break;
             
-            personNameForClose = personName;
-
-            // User in databasede olup olmadigini kontrol et
-            userId = await checkPerson(personName);
-            console.log("User id => ", userId)
-        } 
-
-        // Last channel id sent
-        else if(listeningMessage.command === 'sendLastChannelId'){
-            const lastChannelId = await lastId();
-            ws.send(JSON.stringify({serverCommand: "requestedLastChannelId" ,lastId: lastChannelId }))
+            // Get the channelName parameter from the frontend and check if the channel is in the database
+            case "sendChannelName":
+                if (!channelName) {
+                    console.error("Channel name missing.");
+                    return;
+                }
+        
+                channelNameForClose = channelName;
+                // Create channel
+                createChannel(channelName);
+                // Check if the channel exists
+                channelId = await checkChannel(channelName);
+                // Add user to the channel
+                addUserToChannel(ws, channelName, personNameForClose);
+                // Send a welcome message to the user
+                sendMessage(ws, "message_server", "Server", `Hello ${personNameForClose}, welcome to ${channelName}!`, null, false);
+                break;
+        
+            // Bring old messages from the database
+            case "bringOldMessages":
+                const channelIdForMessage = await checkChannel(channelName);
+                const allMessages = await getMessagesForUser(channelIdForMessage, personNameForClose);
+                console.log(allMessages);
+                ws.send(JSON.stringify({
+                    serverCommand: "oldMessagesCame", 
+                    allMes: allMessages
+                }));
+                break;
+        
+            // Send message from frontend to database
+            case "send_text":
+                const text = listeningMessage.message.toString();
+        
+                // If there is 1 or less person in the conversation, the message will not be sent
+                if (clients[channelNameForClose].size > 1) {
+                    const { messageText, messageId } = await addMessagesToDb(channelId, userId, text);
+        
+                    // Send messages to other users in the same channel
+                    findOtherClient(ws, channelNameForClose, personNameForClose, text, messageId);
+        
+                    // For my messages
+                    ws.send(JSON.stringify({
+                        serverCommand: "myMessages",
+                        from: personNameForClose,
+                        text: text,
+                        messageId: messageId,
+                        deleted: false
+                    }));
+                } else {
+                    // You are alone in the channel
+                    const aloneText = "You are the only one in the chat, so the message didn't go to anyone.";
+                    sendMessage(ws, "alone_command", "Server", aloneText, null, false);
+                }
+                break;
+        
+            // Delete for All
+            case "deleteMessage":
+                const deletedMes = await deleteMessageInDb(messageId);
+        
+                if (deletedMes.command === "Deleted") {
+                    sendToAllClient(personNameForClose, channelNameForClose, messageId);
+                } else if (deletedMes.command === "Not deleted") {
+                    sendTimeError();
+                }
+                break;
+        
+            // Edit message
+            case "editMessage":
+                const edited = await editMessage(messageId, editedText);
+                sendToAllClientEditedMes(edited, channelNameForClose, messageId, sender);
+                break;
+        
+            // Delete the message for the sender only (mark it as deleted for the specific user)
+            case "deleteForMe":
+                const deletedMessageId = listeningMessage.messageId;
+        
+                const deletedForMe = await deleteForMeDb(deletedMessageId, sender);
+                ws.send(JSON.stringify({
+                    serverCommand: "deletedForMe",
+                    messageId: deletedMessageId
+                }));
+                break;
+        
+            // Default case for unknown commands
+            default:
+                console.log("Unknown command:", listeningMessage.command);
+                break;
         }
-
-        // Get the channelName parameter from the frontend and check if the channel is in the database.
-        else if(listeningMessage.command === "sendChannelName"){
-            const channelName = listeningMessage.channelName;
-            if (!channelName) {
-                console.error("Channel name missing.");
-                return;
-            }
-
-            channelNameForClose = channelName;
-
-            // Create channel.
-            createChannel(channelName);   
-
-            // Check if there is a channel on the channel
-            channelId = await checkChannel(channelName);  
-
-            // Add user to channel
-            addUserToChannel(ws, channelName, personNameForClose);  
-
-            // send welcome message to user
-            sendMessage(ws, "message_server", "Server", `Hello ${personNameForClose}, welcome to ${channelName}!` , null , false)    //1
-        }
-
-        // Bring old message from database 
-        else if(listeningMessage.command === "bringOldMessages"){
-
-            const channelNameForMessage = listeningMessage.channelName;
-            const channelIdForMessage = await checkChannel(channelNameForMessage);
-
-            const allMessages = await getMessagesForUser(channelIdForMessage , personNameForClose); //channelId ve username gonderilcek 
-            console.log(allMessages)
-            ws.send(JSON.stringify({serverCommand: "oldMessagesCame" , allMes: allMessages}))
-        }
-
-        // Send message from frontend to database
-        else if(listeningMessage.command === "send_text"){
-            const text = listeningMessage.message.toString();
-
-
-            // If there is 1 or less person in the conversation, the message will not be sent.
-            if (clients[channelNameForClose].size > 1) {
-                
-                const {messageText , messageId} = await addMessagesToDb(channelId, userId, text);
-
-                // Send messages to other users in the same channel
-                findOtherClient(ws, channelNameForClose, personNameForClose, text , messageId);
-                
-                // For my messages
-                ws.send(JSON.stringify({serverCommand: "myMessages" ,from: personNameForClose , text: text , messageId: messageId , deleted: false}))
-            }
-            else {
-                // You are alone in channel 
-                sendMessage(ws, "alone_command", "Server", aloneText , null ,false)
-            }
-        }
-
-        // Delete for All
-        else if(listeningMessage.command === "deleteMessage"){
-            const value = listeningMessage.messageId;
-            const deletedMes = await deleteMessageInDb(value);
-
-            if (deletedMes.command ==="Deleted") {
-                sendToAllClient(personNameForClose, channelNameForClose , value)
-            }
-            else if(deletedMes.command === "Not deleted"){
-                sendTimeError();
-            }
-        }
-
-
-        // Edit message
-        else if(listeningMessage.command === "editMessage"){
-            const editedText = listeningMessage.editedMes;
-            const editedTextId = listeningMessage.messageId;
-            const sender = listeningMessage.sender;
-
-            const edited = await editMessage(editedTextId , editedText);
-            sendToAllClientEditedMes(edited ,channelNameForClose , editedTextId ,sender);
-        }
-
-
-        // Delete the message for the sender only (mark it as deleted for the specific user)
-        else if(listeningMessage.command === "deleteForMe"){
-            const deletedMessageId = listeningMessage.messageId;
-            const sender = listeningMessage.sender;  
-
-            const deletedForMe = await deleteForMeDb(deletedMessageId ,sender);
-            ws.send(JSON.stringify({ serverCommand: "deletedForMe", messageId: deletedMessageId}));
-        }
+        
     });
 
     ws.on('close', () => {
