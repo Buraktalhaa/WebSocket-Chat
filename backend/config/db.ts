@@ -1,6 +1,4 @@
-import pkg from 'pg';
-const {Pool} = pkg;
-
+import {Pool} from 'pg';
 
 export const pool = new Pool({
     user: 'postgres',
