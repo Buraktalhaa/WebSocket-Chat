@@ -13,7 +13,7 @@ const chatInput = document.querySelector("#chatInput")
 
 let buttonId = 0;
 let channelList = []
-
+let selectedChannelName = "";
 
 
 newUserButton.addEventListener("click", (event) => {
@@ -64,7 +64,6 @@ newUserButton.addEventListener("click", (event) => {
     // When click the send button
     sendNameButton.addEventListener('click', (event1) => {
         event1.preventDefault();
-          
         if (!userName.value) {
             console.log('Please make sure you have filled in name fiels.');
             return;
@@ -128,12 +127,12 @@ newUserButton.addEventListener("click", (event) => {
                     const selectChannel = document.getElementById(buttonId)
                     selectChannel.addEventListener("click", () => {
                         console.log(selectChannel.textContent) 
-                       
-                        ws.send(JSON.stringify({command: 'sendChannelName', channelName: selectChannel.textContent}));
+                        selectedChannelName = selectChannel.textContent;
+                        ws.send(JSON.stringify({command: 'sendChannelName', channelName: selectChannel.textContent, personName:userName.value}));
                         ws.send(JSON.stringify({command: 'sendLastChannelId'}))
 
                         // Bring old sent message
-                        ws.send(JSON.stringify({command: 'bringOldMessages' , channelName: selectChannel.textContent}));   
+                        ws.send(JSON.stringify({command: 'bringOldMessages' , channelName: selectChannel.textContent, personName:userName.value}));   
 
                         // Hide the form after getting channel information
                         hideForm(channelName , sendChannelButton , cancelChannelButton)
@@ -141,7 +140,7 @@ newUserButton.addEventListener("click", (event) => {
                         // Disabled process is removed
                         openDisabled(textInput , sendText);
                         
-                        chatBox(ws , userName.value)
+                        chatBox(ws , userName.value, channelName.textContent)
 
                     })
                 buttonId++;
@@ -161,15 +160,14 @@ newUserButton.addEventListener("click", (event) => {
                 console.log('Please make sure you have filled in name fiels.');
                 return;
             }
-
-            // console.log("Chanel name => " , channelName.value)
-            ws.send(JSON.stringify({ command: 'sendChannelName', channelName: channelName.value}));
+            selectedChannelName = channelName.value;
+            ws.send(JSON.stringify({ command: 'sendChannelName', channelName: channelName.value, personName:userName.value}));
 
             //  Disabled process is removed
             openDisabled(textInput , sendText);
     
             // Bring old sent message
-            ws.send(JSON.stringify({command: 'bringOldMessages' , channelName: channelName.value}));
+            ws.send(JSON.stringify({command: 'bringOldMessages' , channelName: channelName.value, personName:userName.value}));
 
             // Hide the form after getting channel information
             hideForm(channelName , sendChannelButton , cancelChannelButton);
@@ -177,14 +175,14 @@ newUserButton.addEventListener("click", (event) => {
             // If the channel information is written by itself, remove the channel buttons
             ws.send(JSON.stringify({command: 'sendLastChannelId'}))
 
-            chatBox(ws , userName.value);
+            chatBox(ws , userName.value, channelName.value);
         })
 
         // SEND MESSAGE
         sendText.addEventListener('click', () => {
             // Send new message to server
             const message = textInput.value;
-            ws.send(JSON.stringify({ command: "send_text", message }))
+            ws.send(JSON.stringify({ command: "send_text", messageText: message ,personName: userName.value, channelName: selectedChannelName}))
             textInput.value = "";
 
         })
@@ -192,7 +190,7 @@ newUserButton.addEventListener("click", (event) => {
 });
 
 
-function chatBox(ws ,name){
+function chatBox(ws ,name, channelName){
     ws.onmessage = (event) => {  
 
         try {
@@ -284,7 +282,7 @@ function chatBox(ws ,name){
                         return;
                     }                
 
-                    ws.send(JSON.stringify({ command: "editMessage", editedMes: editedMes, messageId: messageId, sender: sender }))
+                    ws.send(JSON.stringify({ command: "editMessage", editedMes: editedMes, messageId: messageId, sender: sender ,channelName: channelName}))
                 })
 
                 // messageElement.textContent = `[Me]: ${message}`
@@ -300,7 +298,7 @@ function chatBox(ws ,name){
 
                 // For all
                 deleteButton.addEventListener("click", () => {
-                    ws.send(JSON.stringify({ command: "deleteMessage", messageId: messageId }))
+                    ws.send(JSON.stringify({ command: "deleteMessage", messageId: messageId, channelName: channelName ,personName: name }))
                     console.log("silmek icin id server a gonderildi", messageId)
                 })
 
@@ -355,12 +353,12 @@ function chatBox(ws ,name){
                     // Click edit button
                     editButton.addEventListener("click", () => {
                         const editedMesContent = prompt(`${text}`);
-                        ws.send(JSON.stringify({ command: "editMessage", editedMes: editedMesContent, messageId: messageId, sender: sender }));
+                        ws.send(JSON.stringify({ command: "editMessage", editedMes: editedMesContent, messageId: messageId, sender: sender ,channelName:channelName}));
                     });
 
                     // Click delete button
                     deleteButton.addEventListener("click", () => {
-                        ws.send(JSON.stringify({ command: "deleteMessage", messageId: messageId }));
+                        ws.send(JSON.stringify({ command: "deleteMessage", messageId: messageId, channelName: channelName ,personName: name}));
                     });
 
                     // Click delete for me
@@ -414,6 +412,3 @@ function chatBox(ws ,name){
         }
     };
 }
-
-
-
