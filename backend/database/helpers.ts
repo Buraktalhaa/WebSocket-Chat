@@ -2,7 +2,7 @@ import {pool} from "../config/db.js";
 
 // TO CHECK IF THE CHANNEL EXISTS OR NOT
 // Return id value whether it exists or not
-export async function checkChannel(channelName){
+export async function checkChannel(channelName:string){
     const query = ('SELECT * FROM channel where channel_name = $1 LIMIT 1')
     const value = [channelName];
 
@@ -56,7 +56,7 @@ export async function addMessagesToDb(channelId , userId , text){
 
 // Get channel names from database
 export async function getChannelList(){
-    const channelList =[];
+    const channelList:string[] =[];
     const query = ('SELECT channel_name FROM channel');
     const channels = await pool.query(query)
     channels.rows.forEach(channel => {
@@ -66,7 +66,7 @@ export async function getChannelList(){
 }
 
 // Delete message in database
-export async function deleteMessageInDb(value){
+export async function deleteMessageInDb(value:number){
     try {
         const conditionQuery = 'SELECT created_time FROM messages WHERE id=$1;'
         const conditionValue = [value];
@@ -74,19 +74,18 @@ export async function deleteMessageInDb(value){
 
         const createdTime = new Date(result.rows[0].created_time);
         const currentTime = new Date()
-        const timeDifference = currentTime - createdTime;
+        const timeDifference = currentTime.getTime() - createdTime.getTime();
         console.log("Time difference = >" , timeDifference)
         const differenceInMinutes = Math.floor(timeDifference / 60000);
-        console.log("calismadi", differenceInMinutes)
         if (differenceInMinutes < 1) {
             const queryMessage = 'UPDATE messages SET deleted=$2 WHERE id=$1';
 
             const valueMessage = [value, true]
         
             await pool.query(queryMessage , valueMessage)
-            return {command: "Silindi"};
+            return {command: "Deleted"};
         } else {
-            return {command: "Silinemedi"};
+            return {command: "Not deleted"};
         }
     } catch (error) {
         console.error(error);
