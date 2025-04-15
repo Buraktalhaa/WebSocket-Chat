@@ -1,3 +1,5 @@
+import { WebSocket } from "ws";
+
 export type MessageType = {
     editedMes: string,
     sender: string,
@@ -9,6 +11,4 @@ export type MessageType = {
     messageId:number
 }
 
-export type ClientsType ={
-    clients:Record<string, Set<WebSocket>>
-}
+export type ClientsType = Record<string, Set<WebSocket>>;
