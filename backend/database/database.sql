@@ -22,8 +22,6 @@ CREATE TABLE messages(
     deleted_for_users JSONB DEFAULT '[]'
 );
 
-
-
 -- psql -U postgres -f database.sql
 
 -- delete database

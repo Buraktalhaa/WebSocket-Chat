@@ -6,14 +6,14 @@ import { config } from "./config/config.js";
 class WebSocketServerApp {
     private port: number;
     public wss: WebSocketServer;
-    public clients:ClientsType;
+    public clients:ClientsType ;
     public messageHandler: MessageHandler;
 
     constructor(port: number) {
         console.log("WebSocketServerApp start");
         this.port = port;
         this.wss = new WebSocketServer({ port: this.port });
-        this.clients; 
+        this.clients = {}; 
         this.messageHandler = new MessageHandler(); 
 
         console.log(`Server started on port ${this.port}`);

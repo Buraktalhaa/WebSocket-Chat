@@ -1,7 +1,6 @@
 import { checkChannel, checkPerson, addMessagesToDb, getChannelList, deleteMessageInDb, editMessage, deleteForMeDb, lastId, getMessagesForUser } from "./database/helpers.js";
 import { WebSocket } from "ws";
 import { MessageType , ClientsType } from "./types/message.type.js";
-import { config } from "./config/config.js";
 
 
 
